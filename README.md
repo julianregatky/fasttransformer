@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 ## Quickstart
 
-* Import everything from `fasttransformer` and create an instance of the class `FastTransformer`
+* Import the `FastTransformer` class from `fasttransformer` and create an instance of the class `FastTransformer`
 
 ```python
 from fasttransformer import *
