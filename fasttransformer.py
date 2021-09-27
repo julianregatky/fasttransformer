@@ -17,6 +17,10 @@ def format_time(elapsed):
 	elapsed_rounded = int(round((elapsed)))
 	return str(datetime.timedelta(seconds=elapsed_rounded))
 
+def softmax(x):
+	e_x = np.exp(x - np.max(x))
+	return e_x / e_x.sum(axis=0)
+
 class FastTransformer:
 	def __init__(self, model, num_labels, do_lower_case, batch_size, epochs, max_length, device, output_dir):
 		self.model = AutoModelForSequenceClassification.from_pretrained(
@@ -219,3 +223,38 @@ class FastTransformer:
 		model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
 		model_to_save.save_pretrained(self.output_dir)
 		self.tokenizer.save_pretrained(self.output_dir)
+
+	def predict(self, dataloader):
+		# Ponemos el modelo en modo de evaluación
+		self.model.eval()
+
+		# Donde vamos a almacenar los outputs de test.
+		predictions = []
+
+		# Predecimos para cada batch del DataLoader de test. 
+		for batch in dataloader:
+			# Pasamos el batch al device
+			batch = tuple(t.to(self.device) for t in batch)
+			
+			# Obtenemos los tensores
+			b_input_ids, b_input_mask, b_labels = batch
+			
+			# Omitimos computar gradientes (en esta altura no lo queremos) y así ahorramos
+			# memoria y tiempo
+			with torch.no_grad():
+				# Forward pass y cálculo de logits (predicciones previas a softmax)
+				outputs = self.model(
+					b_input_ids,
+					attention_mask=b_input_mask
+					)
+
+			logits = outputs[0]
+
+			# Movemos logits y labels a CPU por si están en GPU.
+			logits = logits.detach().cpu().numpy()
+
+			# Guardamos las predicciones.
+			for pred in logits:
+				predictions.append(tuple(softmax(pred)))
+
+		return predictions
