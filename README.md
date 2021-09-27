@@ -1,7 +1,7 @@
 # FastTransformer - Easy Transformers for Text Classification
 
 
-FastTransformer is an easy-to-use Python library for training transformers for text classification tasks. It takes care of most intricacies frequently faced in practice and only delegates to users the most fundamental settings of the classification problem.
+FastTransformer is an easy-to-use Python library for training transformers for text classification tasks. It takes care of most of the intricacies frequently faced in practice and only leaved the most fundamental settings of the classification problem for the user to define.
 
 ## Installation
 
