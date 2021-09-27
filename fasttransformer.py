@@ -7,8 +7,9 @@ import torch
 import numpy as np
 import pandas as pd
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AdamW, get_linear_schedule_with_warmup
+from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModelForSequenceClassification, AdamW, get_linear_schedule_with_warmup
 from torch.utils.data import TensorDataset, random_split, DataLoader, RandomSampler, SequentialSampler
+from tqdm import tqdm
 
 def format_time(elapsed):
 	'''
@@ -21,10 +22,18 @@ def softmax(x):
 	e_x = np.exp(x - np.max(x))
 	return e_x / e_x.sum(axis=0)
 
+class DatasetMLM(torch.utils.data.Dataset):
+	def __init__(self, encodings):
+		self.encodings = encodings
+	def __getitem__(self, idx):
+		return {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+	def __len__(self):
+		return len(self.encodings.input_ids)
+
 class FastTransformer:
-	def __init__(self, model, num_labels, do_lower_case, batch_size, epochs, max_length, device, output_dir):
+	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, epochs, max_length, device, output_dir):
 		self.model = AutoModelForSequenceClassification.from_pretrained(
-			model,                        # El modelo BERT seleccioando.
+			pretrained_path,              # El modelo pre-entrenado.
 			num_labels = num_labels,      # Nro de labels de salida (2 para clasif. binaria).
 			output_attentions = False,    # Si queremos que devuelva los "attention weights".
 			output_hidden_states = False, # Si queremos que devuelva los hidden states.
@@ -32,9 +41,11 @@ class FastTransformer:
 										  # poder aplicarles softmax y obtener probs.
 			)
 		self.tokenizer = tokenizer = AutoTokenizer.from_pretrained(
-			model,
+			pretrained_path,
 			do_lower_case=do_lower_case
 			)
+		self.pretrained_path = pretrained_path
+		self.num_labels = num_labels
 		self.batch_size = batch_size
 		self.epochs = epochs              # Nro de épocas (veces que el modelo ve el dataset de training entero).
 		self.max_length = max_length
@@ -110,7 +121,80 @@ class FastTransformer:
 
 		return dataloader
 
-	def train(self, dataloader):
+	def pretrain_mlm(self, input_text, epochs=1, mlm_probability=0.15, output_dir='pretrained_mlm', update_classifier_pretrained_model=True):
+		
+		inputs = self.tokenizer(
+			input_text,
+			return_tensors='pt',
+			max_length=self.max_length,
+			truncation=True,
+			padding='max_length'
+			)
+
+		inputs['labels'] = inputs.input_ids.detach().clone()
+		rand = torch.rand(inputs.input_ids.shape)
+		mask_arr = (rand < mlm_probability) * (inputs.input_ids != 101) * (inputs.input_ids != 102) * (inputs.input_ids != 0)
+
+		selection = []
+		for i in range(inputs.input_ids.shape[0]):
+			selection.append(torch.flatten(mask_arr[i].nonzero()).tolist())
+			inputs.input_ids[i, selection[i]] = 103
+
+		dataset = DatasetMLM(inputs)
+		loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+		model = AutoModelForMaskedLM.from_pretrained(self.pretrained_path)
+		model.to(self.device)
+
+		if self.device == 'cuda':
+			torch.cuda.empty_cache()
+
+		model.train()
+		optim = AdamW(model.parameters(), lr=5e-5)
+
+		for epoch in range(epochs):
+			# setup loop with TQDM and dataloader
+			loop = tqdm(loader, leave=True)
+			for batch in loop:
+				# initialize calculated gradients (from prev step)
+				optim.zero_grad()
+				# pull all tensor batches required for training
+				input_ids = batch['input_ids'].to(self.device)
+				attention_mask = batch['attention_mask'].to(self.device)
+				labels = batch['labels'].to(self.device)
+				# process
+				outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+				# extract loss
+				loss = outputs.loss
+				# calculate loss for every parameter that needs grad update
+				loss.backward()
+				# update parameters
+				optim.step()
+				# print relevant info to progress bar
+				loop.set_description(f'Epoch {epoch}')
+				loop.set_postfix(loss=loss.item())
+
+		# Creamos el dir de guardado si es que no existe
+		if not os.path.exists(output_dir):
+			os.makedirs(output_dir)
+
+		# Guardamos el modelo pre-entrenado.
+		# Después se puede levantar desde la función `from_pretrained()`
+		model_to_save = model.module if hasattr(model, 'module') else model
+		model_to_save.save_pretrained(output_dir)
+		self.tokenizer.save_pretrained(output_dir)
+
+		if update_classifier_pretrained_model:
+			self.model = AutoModelForSequenceClassification.from_pretrained(
+				output_dir,
+				num_labels = self.num_labels,
+				output_attentions = False,
+				output_hidden_states = False,
+				return_dict=False
+				)
+
+
+	def train_classifier(self, dataloader):
 
 		self.model.to(self.device)
 
@@ -205,7 +289,7 @@ class FastTransformer:
 
 			print("")
 			print("  Average training loss: {0:.2f}".format(avg_train_loss))
-			print("  Training epcoh took: {:}".format(training_time))
+			print("  Training epoch took: {:}".format(training_time))
 
 		print("")
 		print("Training complete!")
