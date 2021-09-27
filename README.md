@@ -74,7 +74,7 @@ preds = ft.predict(test_dataloader)
 
 Please find the API documentation [here](https://raspy-pet-2ee.notion.site/FastTransformer-5433308fce8f4eaca137453d15d633fc) (coming soon).
 
-Also check out the example notebook, available on [colab](https://colab.research.google.com/drive/1Od9z7zZFtwXyXP0bRuyVWtK0HH03f07R?usp=sharing)
+Also check out the example notebook, available in [colab](https://colab.research.google.com/drive/1Od9z7zZFtwXyXP0bRuyVWtK0HH03f07R?usp=sharing)
 
 
 ## License
