@@ -29,7 +29,6 @@ ft = FastTransformer(
 	num_labels=2,
 	do_lower_case=False,
 	batch_size=32,
-	epochs=5,
 	max_length=30,
 	device='cuda' if torch.cuda.is_available() else 'cpu',
 	output_dir='trained_model'
@@ -57,7 +56,7 @@ train_dataloader = ft.transform(
 	train.label.values,
 	sampler='random'
 	)
-ft.train_classifier(train_dataloader)
+ft.train_classifier(train_dataloader, epochs=5)
 ```
 
 * Obtain quick predictions
