@@ -22,7 +22,7 @@ pip install -r requirements.txt
 * Import the `FastTransformer` class from `fasttransformer` and create an instance of the class `FastTransformer`
 
 ```python
-from fasttransformer import *
+from fasttransformer import FastTransformer
 
 ft = FastTransformer(
 	pretrained_path='bert-base-cased',
