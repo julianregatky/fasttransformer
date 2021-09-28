@@ -31,7 +31,7 @@ class DatasetMLM(torch.utils.data.Dataset):
 		return len(self.encodings.input_ids)
 
 class FastTransformer:
-	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, epochs, max_length, device, output_dir):
+	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, max_length, device, output_dir):
 		self.model = AutoModelForSequenceClassification.from_pretrained(
 			pretrained_path,              # El modelo pre-entrenado.
 			num_labels = num_labels,      # Nro de labels de salida (2 para clasif. binaria).
@@ -47,7 +47,6 @@ class FastTransformer:
 		self.pretrained_path = pretrained_path
 		self.num_labels = num_labels
 		self.batch_size = batch_size
-		self.epochs = epochs              # Nro de épocas (veces que el modelo ve el dataset de training entero).
 		self.max_length = max_length
 		self.device = device
 		self.output_dir = output_dir
@@ -194,7 +193,7 @@ class FastTransformer:
 				)
 
 
-	def train_classifier(self, dataloader):
+	def train_classifier(self, dataloader, epochs=1):
 
 		self.model.to(self.device)
 
@@ -202,7 +201,7 @@ class FastTransformer:
 
 		# Número total de steps es [número de batches] x [numbero de épocas]. 
 		# (Esto no es igual al nro de muestras de training).
-		total_steps = len(dataloader) * self.epochs
+		total_steps = len(dataloader) * epochs
 
 		# Creamos el learning rate scheduler (agiliza el entrenamiento).
 		scheduler = get_linear_schedule_with_warmup(
@@ -228,14 +227,14 @@ class FastTransformer:
 		total_t0 = time.time()
 
 		# Para cada época...
-		for epoch_i in range(self.epochs):
+		for epoch_i in range(epochs):
 			
 			# ========================================
 			#               Training
 			# ========================================
 
 			print("")
-			print('======== Epoch {:} / {:} ========'.format(epoch_i + 1, self.epochs))
+			print('======== Epoch {:} / {:} ========'.format(epoch_i + 1, epochs))
 			print('Training...')
 
 			# Para calcular el tiempo que le llevó a la época.
