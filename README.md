@@ -78,6 +78,7 @@ Also check out the example notebook, available in [colab](https://colab.research
 
 ## Improvements to be incorporated ASAP
 
+* API Docs
 * Commented code in English
 * Docstrings
 * Better printing of training and validation loss
