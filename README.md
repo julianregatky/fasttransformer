@@ -11,7 +11,7 @@ FastTransformer requires **Python version >= 3.6**. It can be installed cloning 
 git clone https://github.com/julianregatky/fasttransformer
 ```
 
-Make sure you have all modules and their dependencies installed
+Make sure to have all modules and their dependencies installed
 
 ```shell
 pip install -r requirements.txt
