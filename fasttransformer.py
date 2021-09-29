@@ -13,12 +13,15 @@ from tqdm import tqdm
 
 def format_time(elapsed):
 	'''
-	Toma timpo en segundos y los devuelve como string con formato hh:mm:ss
+	Takes a time in seconds and returns a string hh:mm:ss.
 	'''
 	elapsed_rounded = int(round((elapsed)))
 	return str(datetime.timedelta(seconds=elapsed_rounded))
 
 def softmax(x):
+	'''
+	Takes logits and return probs.
+	'''
 	e_x = np.exp(x - np.max(x))
 	return e_x / e_x.sum(axis=0)
 
@@ -33,12 +36,11 @@ class DatasetMLM(torch.utils.data.Dataset):
 class FastTransformer:
 	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, max_length, device, output_dir):
 		self.model = AutoModelForSequenceClassification.from_pretrained(
-			pretrained_path,              # El modelo pre-entrenado.
-			num_labels = num_labels,      # Nro de labels de salida (2 para clasif. binaria).
-			output_attentions = False,    # Si queremos que devuelva los "attention weights".
-			output_hidden_states = False, # Si queremos que devuelva los hidden states.
-			return_dict=False             # Le pedimos que nos devuelva los logits para
-										  # poder aplicarles softmax y obtener probs.
+			pretrained_path,              # Path to the pretrained model or name of huggingface model.
+			num_labels = num_labels,      # Number of output labels (2 for binary classification).
+			output_attentions = False,
+			output_hidden_states = False,
+			return_dict=False             # False returns logits for softmax
 			)
 		self.tokenizer = tokenizer = AutoTokenizer.from_pretrained(
 			pretrained_path,
@@ -52,8 +54,7 @@ class FastTransformer:
 		self.output_dir = output_dir
 
 	def set_optimizer(self, lr=2e-5, eps=1e-8):
-		# Preparamos el optimizador.
-		# Usamos AdamW del módulo transformers (vs uno nativo de Pytorch).
+		# AdamW comes in the transformers module (vs Pytorch's native alternative)
 		self.optimizer = AdamW(self.model.parameters(),
 			lr = lr,
 			eps = eps
@@ -63,35 +64,35 @@ class FastTransformer:
 
 		tokenizer = self.tokenizer
 
-		# Tokenizamos todos los textos y mapeamos los tokens a sus IDs
+		# Tokenizes texts and maps tokens to their IDs
 		input_ids = []
 		attention_masks = []
 
-		# Para cada texto...
+		# For each document...
 		for text in X:
-			# Cosas que hace 'encode_plus':
-			#   (1) Tokenize los textos.
-			#   (2) Pre-appendea el token '[CLS]' al principio.
-			#   (3) Appendea el token '[SEP]' al final.
-			#   (4) Mapea tokens a sus IDs.
-			#   (5) Agrega paddings o trunca los textos de acuerdo al max_length.
-			#   (6) Crea "attention masks" para los tokens [PAD] de padding.
+			# Things 'encode_plus' does:
+			#   (1) Tokenizes documents.
+			#   (2) Appends the '[CLS]' token at the beggining.
+			#   (3) Appends the '[SEP]' token at the end.
+			#   (4) Maps tokens to their IDs.
+			#   (5) Adds padding or truncates documents according to the max_length.
+			#   (6) Creates "attention masks" for the [PAD] tokens (padding).
 			encoded_dict = tokenizer.encode_plus(
-								text,                              # Texto a encodear.
-								add_special_tokens = True,         # '[CLS]' y '[SEP]'.
-								max_length = self.max_length, # Padding/truncado.
+								text,
+								add_special_tokens = True,    # '[CLS]' and '[SEP]'
+								max_length = self.max_length,
 								pad_to_max_length = True,
-								return_attention_mask = True,      # Attention masks.
-								return_tensors = 'pt',             # Devuelve tensores de pytorch.
+								return_attention_mask = True,
+								return_tensors = 'pt',        # Returns PyTorch tensors
 						  )
-			
-			# Agrega el texto con encoding a la lista de inputs del modelo.
+
+			# Adds the encoded text to the list of inputs for the model
 			input_ids.append(encoded_dict['input_ids'])
 			
-			# Idem con los attention masks (sirven para identificar padding de no-padding).
+			# Does the same with the attention masks
 			attention_masks.append(encoded_dict['attention_mask'])
 
-		# Convierte las listas en tensores.
+		# Converts the above lists to tensors
 		input_ids = torch.cat(input_ids, dim=0)
 		attention_masks = torch.cat(attention_masks, dim=0)
 		labels = torch.tensor(labels)
@@ -107,21 +108,23 @@ class FastTransformer:
 
 		dataset = TensorDataset(input_ids, attention_masks, labels)
 
+		# Random sampler for training and sequential for testing
 		if sampler == 'random':
 			sampler = RandomSampler(dataset)
 		elif sampler == 'sequential':
 			sampler = SequentialSampler(dataset)
 
 		dataloader = DataLoader(
-			dataset,                       # Muestras de training.
-			sampler = sampler,             # Selección de batches aleatoria.
-			batch_size = self.batch_size   # Fijamos el tamaño del batch.
+			dataset,
+			sampler = sampler,
+			batch_size = self.batch_size
 			)
 
 		return dataloader
 
 	def pretrain_mlm(self, input_text, epochs=1, mlm_probability=0.15, output_dir='pretrained_mlm', update_classifier_pretrained_model=True):
 		
+		# Passes the inputs through the tokenizer
 		inputs = self.tokenizer(
 			input_text,
 			return_tensors='pt',
@@ -130,60 +133,67 @@ class FastTransformer:
 			padding='max_length'
 			)
 
+		# We're going to be masking tokens at random. So we...
+		# 1) create a copy of the original tokens as labels
+		# 2) assign random float in the interval (0, 1) for each token
+		# 3) if the random float is < mlm_probability and it isn't a [CLS], [SEP] or [PAD] token we mask it
 		inputs['labels'] = inputs.input_ids.detach().clone()
 		rand = torch.rand(inputs.input_ids.shape)
 		mask_arr = (rand < mlm_probability) * (inputs.input_ids != 101) * (inputs.input_ids != 102) * (inputs.input_ids != 0)
-
 		selection = []
 		for i in range(inputs.input_ids.shape[0]):
 			selection.append(torch.flatten(mask_arr[i].nonzero()).tolist())
 			inputs.input_ids[i, selection[i]] = 103
 
+		# Training dataloader
 		dataset = DatasetMLM(inputs)
 		loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
+		# Instance of the model + send it to cuda if available
 		model = AutoModelForMaskedLM.from_pretrained(self.pretrained_path)
 		model.to(self.device)
 
 		if self.device == 'cuda':
 			torch.cuda.empty_cache()
 
+		# Begin training
 		model.train()
 		optim = AdamW(model.parameters(), lr=5e-5)
 
 		for epoch in range(epochs):
-			# setup loop with TQDM and dataloader
+			# Setup loop with TQDM and dataloader
 			loop = tqdm(loader, leave=True)
 			for batch in loop:
-				# initialize calculated gradients (from prev step)
+				# Initialize calculated gradients (from prev step)
 				optim.zero_grad()
-				# pull all tensor batches required for training
+				# Pull all tensor batches required for training
 				input_ids = batch['input_ids'].to(self.device)
 				attention_mask = batch['attention_mask'].to(self.device)
 				labels = batch['labels'].to(self.device)
-				# process
+				# Process
 				outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
-				# extract loss
+				# Extract loss
 				loss = outputs.loss
-				# calculate loss for every parameter that needs grad update
+				# Calculate loss for every parameter that needs grad update
 				loss.backward()
-				# update parameters
+				# Update parameters
 				optim.step()
-				# print relevant info to progress bar
+				# Print relevant info to progress bar
 				loop.set_description(f'Epoch {epoch}')
 				loop.set_postfix(loss=loss.item())
 
-		# Creamos el dir de guardado si es que no existe
+		# Create the output dir if it doesn't already exist
 		if not os.path.exists(output_dir):
 			os.makedirs(output_dir)
 
-		# Guardamos el modelo pre-entrenado.
-		# Después se puede levantar desde la función `from_pretrained()`
+		# Save the model
+		# It can leater be used calling the method `from_pretrained()`
 		model_to_save = model.module if hasattr(model, 'module') else model
 		model_to_save.save_pretrained(output_dir)
 		self.tokenizer.save_pretrained(output_dir)
 
 		if update_classifier_pretrained_model:
+			# Update the classifier model with the new language model
 			self.model = AutoModelForSequenceClassification.from_pretrained(
 				output_dir,
 				num_labels = self.num_labels,
@@ -199,11 +209,11 @@ class FastTransformer:
 
 		params = list(self.model.named_parameters())
 
-		# Número total de steps es [número de batches] x [numbero de épocas]. 
-		# (Esto no es igual al nro de muestras de training).
+		# Number of total steps is [number of batches] x [number of epochs]
+		# (This is not the same as the nbr of training samples)
 		total_steps = len(dataloader) * epochs
 
-		# Creamos el learning rate scheduler (agiliza el entrenamiento).
+		# Create the learning rate scheduler
 		scheduler = get_linear_schedule_with_warmup(
 			self.optimizer,
 			num_warmup_steps = 0,
@@ -211,7 +221,7 @@ class FastTransformer:
 			)
 
 
-		# Fijamos random seed por reproducción
+		# Set the random seed
 		seed_val = 42
 		random.seed(seed_val)
 		np.random.seed(seed_val)
@@ -220,13 +230,13 @@ class FastTransformer:
 			torch.cuda.empty_cache()
 			torch.cuda.manual_seed_all(seed_val)
 
-		# Acá vamos a guardar el training loss y tiempo durante el entrenamiento.
+		# We'll store training loss and training time here
 		training_stats = []
 
-		# Hora de inicio para calcular el tiempo de entrenamiento de TODO el modelo.
+		# Init time for calculating how long the entire training process takes
 		total_t0 = time.time()
 
-		# Para cada época...
+		# For each epoch...
 		for epoch_i in range(epochs):
 			
 			# ========================================
@@ -237,53 +247,54 @@ class FastTransformer:
 			print('======== Epoch {:} / {:} ========'.format(epoch_i + 1, epochs))
 			print('Training...')
 
-			# Para calcular el tiempo que le llevó a la época.
+			# For calculating the time taken by the current epoch
 			t0 = time.time()
 
-			# Reset the total loss for this epoch.
+			# Reset the total loss for this epoch
 			total_train_loss = 0
 
-			# Ponemos el modelo en "modo entrenamiento"
+			# We put the model in training mode
 			self.model.train()
 
-			# Iteramos sobre los batches de los datos de training...
+			# Iterating over training batches...
 			for step, batch in enumerate(dataloader):
 
-				# Cada 40 batches imprimimos por pantalla el progreso.
+				# Print process every 40 batches
 				if step % 40 == 0 and not step == 0:
 					elapsed = format_time(time.time() - t0)
 					print('  Batch {:>5,}  of  {:>5,}.    Elapsed: {:}.'.format(step, len(dataloader), elapsed))
 
-				# Obtenemos los tensores del batch y los mandamos al device
+				# Get tensors and send them to device
 				b_input_ids = batch[0].to(self.device)
 				b_input_mask = batch[1].to(self.device)
 				b_labels = batch[2].to(self.device)
 
-				# Limipiamos los gradientes de la pasada backward anterior.
+				# Clear out the gradients (by default they accumulate)
 				self.model.zero_grad()        
 
-				# Hacemos la pasada forward y nos quedamos con el loss y con los logits.
+				# Forward pass
 				loss, logits = self.model(
 					b_input_ids,
 					attention_mask=b_input_mask,
 					labels=b_labels
 					)
 
-				# Sumamos el loss del batch para calcular el loss promedio al final.
+				# Accumulate the training loss over all of the batches
 				total_train_loss += loss.item()
-				# Hacemos la pasada backward para calcular los gradientes.
+				# Perform a backward pass to calculate the gradients
 				loss.backward()
-				# Esto sirve para prevenir el problema de "gradientes que explotan".
+				# Clip the norm of the gradients to 1.0
+				# This is to help prevent the "exploding gradients" problem
 				torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-				# Actualizamos los pesos moviéndonos en dirección opuesta al gradiente.
+				# Update parameters and take a step using the computed gradient
 				self.optimizer.step()
-				# Actualizamos el learning rate con el scheduler.
+				# Update the learning rate
 				scheduler.step()
 
-			# Calculamos el loss promedio sobre todos los batches.
+			# Calculate the average loss over all of the batches
 			avg_train_loss = total_train_loss / len(dataloader)            
 			
-			# Medimos cuánto demoró el epoch.
+			# Measure how long this epoch took
 			training_time = format_time(time.time() - t0)
 
 			print("")
@@ -295,37 +306,37 @@ class FastTransformer:
 
 		print("Total training took {:} (h:mm:ss)".format(format_time(time.time()-total_t0)))
 
-		# Creamos el dir de guardado si es que no existe
+		# Create the output dir if it doesn't already exist
 		if not os.path.exists(self.output_dir):
 			os.makedirs(self.output_dir)
 
 		print("Saving model to %s" % self.output_dir)
 
-		# Guardamos el modelo pre-entrenado.
-		# Después se puede levantar desde la función `from_pretrained()`
+		# Save the model
+		# It can leater be used calling the method `from_pretrained()`
 		model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
 		model_to_save.save_pretrained(self.output_dir)
 		self.tokenizer.save_pretrained(self.output_dir)
 
 	def predict(self, dataloader):
-		# Ponemos el modelo en modo de evaluación
+		# Put model in evaluation mode
 		self.model.eval()
 
-		# Donde vamos a almacenar los outputs de test.
+		# Tracking variable
 		predictions = []
 
-		# Predecimos para cada batch del DataLoader de test. 
+		# Predict.
 		for batch in dataloader:
-			# Pasamos el batch al device
+			# Add batch to GPU, if available
 			batch = tuple(t.to(self.device) for t in batch)
 			
-			# Obtenemos los tensores
+			# Unpack the inputs from our dataloader
 			b_input_ids, b_input_mask, b_labels = batch
 			
-			# Omitimos computar gradientes (en esta altura no lo queremos) y así ahorramos
-			# memoria y tiempo
+			# Telling the model not to compute or store gradients, saving memory and 
+			# speeding up prediction
 			with torch.no_grad():
-				# Forward pass y cálculo de logits (predicciones previas a softmax)
+				# Forward pass, calculate logits (predictions prior to softmax)
 				outputs = self.model(
 					b_input_ids,
 					attention_mask=b_input_mask
@@ -333,10 +344,10 @@ class FastTransformer:
 
 			logits = outputs[0]
 
-			# Movemos logits y labels a CPU por si están en GPU.
+			# Move logits to CPU, if on GPU
 			logits = logits.detach().cpu().numpy()
 
-			# Guardamos las predicciones.
+			# Store predictions
 			for pred in logits:
 				predictions.append(tuple(softmax(pred)))
 
