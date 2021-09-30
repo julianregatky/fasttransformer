@@ -43,6 +43,7 @@ ft.pretrain_mlm(
 	epochs=2,
 	mlm_probability=0.15,
 	output_dir='pretrained_mlm',
+	random_state=42,
 	update_classifier_pretrained_model=True
 	)
 ```
@@ -56,7 +57,9 @@ train_dataloader = ft.transform(
 	train.label.values,
 	sampler='random'
 	)
-ft.train_classifier(train_dataloader, epochs=5)
+ft.train_classifier(train_dataloader,
+					epochs=5,
+					random_state=42)
 ```
 
 * Obtain quick predictions
