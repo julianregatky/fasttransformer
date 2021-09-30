@@ -5,14 +5,14 @@ import time
 import torch
 
 import numpy as np
-import pandas as pd
 
 from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModelForSequenceClassification, AdamW, get_linear_schedule_with_warmup
-from torch.utils.data import TensorDataset, random_split, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 
+
 def format_time(elapsed: float) -> str:
-	'''
+	"""
 	Takes a time in seconds and returns a string hh:mm:ss.
 
 	Parameters
@@ -27,12 +27,13 @@ def format_time(elapsed: float) -> str:
 	elapsed_rounded: str
 		Time in the format hh:mm:ss.
 	
-	'''
-	elapsed_rounded = str(datetime.timedelta(seconds=int(round((elapsed)))))
+	"""
+	elapsed_rounded = str(datetime.timedelta(seconds=int(round(elapsed))))
 	return elapsed_rounded
 
+
 def softmax(x: np.array) -> np.array:
-	'''
+	"""
 	Takes logits and return probs.
 
 	Parameters
@@ -47,29 +48,33 @@ def softmax(x: np.array) -> np.array:
 	softmax_probs: np.array
 		Probs from the model's logits.
 
-	'''
+	"""
 	e_x = np.exp(x - np.max(x))
 	softmax_probs = e_x / e_x.sum(axis=0)
 	return softmax_probs
 
+
 class DatasetMLM(torch.utils.data.Dataset):
 	def __init__(self, encodings):
 		self.encodings = encodings
+
 	def __getitem__(self, idx):
 		return {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+
 	def __len__(self):
 		return len(self.encodings.input_ids)
+
 
 class FastTransformer:
 	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, max_length, device, output_dir):
 		self.model = AutoModelForSequenceClassification.from_pretrained(
 			pretrained_path,              # Path to the pretrained model or name of huggingface model.
-			num_labels = num_labels,      # Number of output labels (2 for binary classification).
-			output_attentions = False,
-			output_hidden_states = False,
+			num_labels=num_labels,      # Number of output labels (2 for binary classification).
+			output_attentions=False,
+			output_hidden_states=False,
 			return_dict=False             # False returns logits for softmax
 			)
-		self.tokenizer = tokenizer = AutoTokenizer.from_pretrained(
+		self.tokenizer = AutoTokenizer.from_pretrained(
 			pretrained_path,
 			do_lower_case=do_lower_case
 			)
@@ -79,9 +84,10 @@ class FastTransformer:
 		self.max_length = max_length
 		self.device = device
 		self.output_dir = output_dir
+		self.optimizer = None
 
 	def set_optimizer(self, lr: float = 2e-5, eps: float = 1e-8) -> None:
-		'''
+		"""
 		Creates the optimizer for training the transformer.
 
 		Parameters
@@ -94,18 +100,19 @@ class FastTransformer:
 
 		Returns
 		__________
-		
+
 		None
 
-		'''
+		"""
 		# AdamW comes in the transformers module (vs Pytorch's native alternative)
-		self.optimizer = AdamW(self.model.parameters(),
-			lr = lr,
-			eps = eps
-			)
+		self.optimizer = AdamW(
+			self.model.parameters(),
+			lr=lr,
+			eps=eps
+		)
 
 	def tokenize(self, X: list, labels: list) -> tuple:
-		'''
+		"""
 		Tokenizes a list or array of documents.
 
 		Parameters
@@ -125,7 +132,7 @@ class FastTransformer:
 			Tensor identifying padded tokens.
 		labels: tensor
 			Tensor with the label associated to each document.
-		'''
+		"""
 
 		tokenizer = self.tokenizer
 
@@ -164,8 +171,8 @@ class FastTransformer:
 
 		return input_ids, attention_masks, labels
 
-	def transform(self, X: list, y: list = [], sampler: str = 'random') -> DataLoader:
-		'''
+	def transform(self, X: list, y: list = None, sampler: str = 'random') -> DataLoader:
+		"""
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
 
@@ -185,10 +192,10 @@ class FastTransformer:
 		dataloader: DataLoader
 			DataLoader with batches created.
 
-		'''
+		"""
 
 		# If no labels are provided (testing model), create dummy labels that will be ignored
-		if len(y) == 0:
+		if y is None:
 			y = [0]*len(X)
 
 		input_ids, attention_masks, labels = self.tokenize(X, y)
@@ -203,19 +210,22 @@ class FastTransformer:
 
 		dataloader = DataLoader(
 			dataset,
-			sampler = sampler,
-			batch_size = self.batch_size
-			)
+			sampler=sampler,
+			batch_size=self.batch_size
+		)
 
 		return dataloader
 
-	def pretrain_mlm(self, input_text: list,
-					 epochs: int = 1,
-					 mlm_probability: float = 0.15,
-					 output_dir: str = 'pretrained_mlm',
-					 random_state: int = 42,
-					 update_classifier_pretrained_model: bool = True) -> None:
-		'''
+	def pretrain_mlm(
+			self,
+			input_text: list,
+			epochs: int = 1,
+			mlm_probability: float = 0.15,
+			output_dir: str = 'pretrained_mlm',
+			random_state: int = 42,
+			update_classifier_pretrained_model: bool = True
+	) -> None:
+		"""
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
 
@@ -246,7 +256,7 @@ class FastTransformer:
 		
 		None
 
-		'''
+		"""
 
 		# Passes the inputs through the tokenizer
 		inputs = self.tokenizer(
@@ -315,7 +325,7 @@ class FastTransformer:
 			os.makedirs(output_dir)
 
 		# Save the model
-		# It can leater be used calling the method `from_pretrained()`
+		# It can later be used calling the method `from_pretrained()`
 		model_to_save = model.module if hasattr(model, 'module') else model
 		model_to_save.save_pretrained(output_dir)
 		self.tokenizer.save_pretrained(output_dir)
@@ -324,15 +334,14 @@ class FastTransformer:
 			# Update the classifier model with the new language model
 			self.model = AutoModelForSequenceClassification.from_pretrained(
 				output_dir,
-				num_labels = self.num_labels,
-				output_attentions = False,
-				output_hidden_states = False,
+				num_labels=self.num_labels,
+				output_attentions=False,
+				output_hidden_states=False,
 				return_dict=False
 				)
 
-
-	def train_classifier(self, dataloader: DataLoader, epochs: int=1, random_state: int=42) -> None:
-		'''
+	def train_classifier(self, dataloader: DataLoader, epochs: int = 1, random_state: int = 42) -> None:
+		"""
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
 
@@ -353,11 +362,12 @@ class FastTransformer:
 		
 		None
 
-		'''
+		"""
 
 		self.model.to(self.device)
 
-		params = list(self.model.named_parameters())
+		# TODO: Check
+		# params = list(self.model.named_parameters())
 
 		# Number of total steps is [number of batches] x [number of epochs]
 		# (This is not the same as the nbr of training samples)
@@ -366,8 +376,8 @@ class FastTransformer:
 		# Create the learning rate scheduler
 		scheduler = get_linear_schedule_with_warmup(
 			self.optimizer,
-			num_warmup_steps = 0,
-			num_training_steps = total_steps
+			num_warmup_steps=0,
+			num_training_steps=total_steps
 			)
 
 		random.seed(random_state)
@@ -376,9 +386,6 @@ class FastTransformer:
 		if self.device == 'cuda':
 			torch.cuda.empty_cache()
 			torch.cuda.manual_seed_all(random_state)
-
-		# We'll store training loss and training time here
-		training_stats = []
 
 		# Init time for calculating how long the entire training process takes
 		total_t0 = time.time()
@@ -466,8 +473,7 @@ class FastTransformer:
 		self.tokenizer.save_pretrained(self.output_dir)
 
 	def predict(self, dataloader):
-
-		'''
+		"""
 		Takes a dataloader with dummy labels and return softmax probs from the trained classifier.
 
 		Parameters
@@ -483,7 +489,7 @@ class FastTransformer:
 			List of tuples (each associated to an obs from the DataLoader).
 			Tuples are softmax probs, and they have as many elements as num_labels in the class instance.
 
-		'''
+		"""
 
 		# Put model in evaluation mode
 		self.model.eval()
