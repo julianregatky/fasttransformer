@@ -213,6 +213,7 @@ class FastTransformer:
 					 epochs: int = 1,
 					 mlm_probability: float = 0.15,
 					 output_dir: str = 'pretrained_mlm',
+					 random_state: int = 42,
 					 update_classifier_pretrained_model: bool = True) -> None:
 		'''
 		Takes input documents and, optionally, labels and returns
@@ -232,6 +233,9 @@ class FastTransformer:
 
 		output_dir: str
 			Path to the folder where the model should get saved at.
+
+		random_state: int (optional, defaults to 42)
+			Seed for reproducing results.
 
 		update_classifier_pretrained_model: bool
 			If True, the pretrained model defined when the class was first instanced
@@ -273,8 +277,12 @@ class FastTransformer:
 		model = AutoModelForMaskedLM.from_pretrained(self.pretrained_path)
 		model.to(self.device)
 
+		random.seed(random_state)
+		np.random.seed(random_state)
+		torch.manual_seed(random_state)
 		if self.device == 'cuda':
 			torch.cuda.empty_cache()
+			torch.cuda.manual_seed_all(random_state)
 
 		# Begin training
 		model.train()
@@ -337,6 +345,8 @@ class FastTransformer:
 		epochs: int (optional, defaults to 1)
 			Times the entire dataset will be used for training.
 
+		random_state: int (optional, defaults to 42)
+			Seed for reproducing results.
 
 		Returns
 		__________
