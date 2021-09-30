@@ -11,19 +11,46 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModelForSequen
 from torch.utils.data import TensorDataset, random_split, DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 
-def format_time(elapsed):
+def format_time(elapsed: float) -> str:
 	'''
 	Takes a time in seconds and returns a string hh:mm:ss.
-	'''
-	elapsed_rounded = int(round((elapsed)))
-	return str(datetime.timedelta(seconds=elapsed_rounded))
 
-def softmax(x):
+	Parameters
+	__________
+
+	elapsed: float
+		Elapsed time.
+
+	Returns
+	__________
+
+	elapsed_rounded: str
+		Time in the format hh:mm:ss.
+	
+	'''
+	elapsed_rounded = str(datetime.timedelta(seconds=int(round((elapsed)))))
+	return elapsed_rounded
+
+def softmax(x: np.array) -> np.array:
 	'''
 	Takes logits and return probs.
+
+	Parameters
+	__________
+
+	x: np.array
+		Logits from the model.
+
+	Returns
+	__________
+
+	softmax_probs: np.array
+		Probs from the model's logits.
+
 	'''
 	e_x = np.exp(x - np.max(x))
-	return e_x / e_x.sum(axis=0)
+	softmax_probs = e_x / e_x.sum(axis=0)
+	return softmax_probs
 
 class DatasetMLM(torch.utils.data.Dataset):
 	def __init__(self, encodings):
@@ -53,7 +80,7 @@ class FastTransformer:
 		self.device = device
 		self.output_dir = output_dir
 
-	def set_optimizer(self, lr: float=2e-5, eps: float=1e-8) -> None:
+	def set_optimizer(self, lr: float = 2e-5, eps: float = 1e-8) -> None:
 		'''
 		Creates the optimizer for training the transformer.
 
@@ -117,12 +144,12 @@ class FastTransformer:
 			#   (6) Creates "attention masks" for the [PAD] tokens (padding).
 			encoded_dict = tokenizer.encode_plus(
 								text,
-								add_special_tokens = True,    # '[CLS]' and '[SEP]'
-								max_length = self.max_length,
-								pad_to_max_length = True,
-								return_attention_mask = True,
-								return_tensors = 'pt',        # Returns PyTorch tensors
-						  )
+								add_special_tokens=True,    # '[CLS]' and '[SEP]'
+								max_length=self.max_length,
+								pad_to_max_length=True,
+								return_attention_mask=True,
+								return_tensors='pt',        # Returns PyTorch tensors
+								)
 
 			# Adds the encoded text to the list of inputs for the model
 			input_ids.append(encoded_dict['input_ids'])
@@ -137,7 +164,7 @@ class FastTransformer:
 
 		return input_ids, attention_masks, labels
 
-	def transform(self, X: list, y: list=[], sampler: str='random') -> DataLoader:
+	def transform(self, X: list, y: list = [], sampler: str = 'random') -> DataLoader:
 		'''
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
@@ -182,9 +209,11 @@ class FastTransformer:
 
 		return dataloader
 
-	def pretrain_mlm(self, input_text: list, epochs: int=1,
-					 mlm_probability: float=0.15, output_dir: str='pretrained_mlm',
-					 update_classifier_pretrained_model: bool=True) -> None:
+	def pretrain_mlm(self, input_text: list,
+					 epochs: int = 1,
+					 mlm_probability: float = 0.15,
+					 output_dir: str = 'pretrained_mlm',
+					 update_classifier_pretrained_model: bool = True) -> None:
 		'''
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
@@ -427,6 +456,25 @@ class FastTransformer:
 		self.tokenizer.save_pretrained(self.output_dir)
 
 	def predict(self, dataloader):
+
+		'''
+		Takes a dataloader with dummy labels and return softmax probs from the trained classifier.
+
+		Parameters
+		__________
+
+		dataloader: DataLoader
+			DataLoader with batches of tokenized documents for getting predictions (wth dummy labels).
+
+		Returns
+		__________
+		
+		predictions: list
+			List of tuples (each associated to an obs from the DataLoader).
+			Tuples are softmax probs, and they have as many elements as num_labels in the class instance.
+
+		'''
+
 		# Put model in evaluation mode
 		self.model.eval()
 
