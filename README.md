@@ -58,8 +58,8 @@ train_dataloader = ft.transform(
 	sampler='random'
 	)
 ft.train_classifier(train_dataloader,
-					epochs=5,
-					random_state=42)
+		    epochs=5,
+		    random_state=42)
 ```
 
 * Obtain quick predictions
