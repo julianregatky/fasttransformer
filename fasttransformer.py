@@ -53,14 +53,52 @@ class FastTransformer:
 		self.device = device
 		self.output_dir = output_dir
 
-	def set_optimizer(self, lr=2e-5, eps=1e-8):
+	def set_optimizer(self, lr: float=2e-5, eps: float=1e-8) -> None:
+		'''
+		Creates the optimizer for training the transformer.
+
+		Parameters
+		__________
+
+		lr: float (optional, defaults to 2e-5)
+			The learning rate to use.
+		eps: float (optional, defaults to 1e-8)
+			Adam’s epsilon for numerical stability.
+
+		Returns
+		__________
+		
+		None
+
+		'''
 		# AdamW comes in the transformers module (vs Pytorch's native alternative)
 		self.optimizer = AdamW(self.model.parameters(),
 			lr = lr,
 			eps = eps
 			)
 
-	def tokenize(self, X, labels):
+	def tokenize(self, X: list, labels: list) -> tuple:
+		'''
+		Tokenizes a list or array of documents.
+
+		Parameters
+		__________
+
+		X: list
+			The list of documents to tokenize.
+		labels: list
+			List of labels, parallel to documents.
+
+		Returns
+		__________
+		
+		input_ids: tensor
+			Tensor of tokenized inputs.
+		attention_masks: tensor
+			Tensor identifying padded tokens.
+		labels: tensor
+			Tensor with the label associated to each document.
+		'''
 
 		tokenizer = self.tokenizer
 
@@ -99,8 +137,30 @@ class FastTransformer:
 
 		return input_ids, attention_masks, labels
 
-	def transform(self, X, y=[], sampler='random'):
+	def transform(self, X: list, y: list=[], sampler: str='random') -> DataLoader:
+		'''
+		Takes input documents and, optionally, labels and returns
+		dataloaders with batches for training or making predictions.
 
+		Parameters
+		__________
+
+		X: list
+			The list of input documents.
+		y: list
+			List of labels, parallel to documents.
+		sampler: str
+			String indicating whether to create batches at random or sequentially
+
+		Returns
+		__________
+		
+		dataloader: DataLoader
+			DataLoader with batches created.
+
+		'''
+
+		# If no labels are provided (testing model), create dummy labels that will be ignored
 		if len(y) == 0:
 			y = [0]*len(X)
 
@@ -122,8 +182,39 @@ class FastTransformer:
 
 		return dataloader
 
-	def pretrain_mlm(self, input_text, epochs=1, mlm_probability=0.15, output_dir='pretrained_mlm', update_classifier_pretrained_model=True):
+	def pretrain_mlm(self, input_text: list, epochs: int=1,
+					 mlm_probability: float=0.15, output_dir: str='pretrained_mlm',
+					 update_classifier_pretrained_model: bool=True) -> None:
+		'''
+		Takes input documents and, optionally, labels and returns
+		dataloaders with batches for training or making predictions.
+
+		Parameters
+		__________
+
+		input_text: list
+			Documents to be used for training with masked language.
+
+		epochs: int (optional, defaults to 1)
+			Times the entire dataset will be used for training.
+
+		mlm_probability: float (optional, defaults to 0.15)
+			Probability for each token to get masked.
+
+		output_dir: str
+			Path to the folder where the model should get saved at.
+
+		update_classifier_pretrained_model: bool
+			If True, the pretrained model defined when the class was first instanced
+			will be replaced with the model fine-tuned on masked language.
+
+		Returns
+		__________
 		
+		None
+
+		'''
+
 		# Passes the inputs through the tokenizer
 		inputs = self.tokenizer(
 			input_text,
@@ -203,7 +294,27 @@ class FastTransformer:
 				)
 
 
-	def train_classifier(self, dataloader, epochs=1):
+	def train_classifier(self, dataloader: DataLoader, epochs: int=1, random_state: int=42) -> None:
+		'''
+		Takes input documents and, optionally, labels and returns
+		dataloaders with batches for training or making predictions.
+
+		Parameters
+		__________
+
+		dataloader: DataLoader
+			DataLoader with batches of tokenized documents for training.
+
+		epochs: int (optional, defaults to 1)
+			Times the entire dataset will be used for training.
+
+
+		Returns
+		__________
+		
+		None
+
+		'''
 
 		self.model.to(self.device)
 
@@ -220,15 +331,12 @@ class FastTransformer:
 			num_training_steps = total_steps
 			)
 
-
-		# Set the random seed
-		seed_val = 42
-		random.seed(seed_val)
-		np.random.seed(seed_val)
-		torch.manual_seed(seed_val)
+		random.seed(random_state)
+		np.random.seed(random_state)
+		torch.manual_seed(random_state)
 		if self.device == 'cuda':
 			torch.cuda.empty_cache()
-			torch.cuda.manual_seed_all(seed_val)
+			torch.cuda.manual_seed_all(random_state)
 
 		# We'll store training loss and training time here
 		training_stats = []
