@@ -499,11 +499,14 @@ class FastTransformer:
 
 		# Predict.
 		for batch in dataloader:
-			# Add batch to GPU, if available
-			batch = tuple(t.to(self.device) for t in batch)
 			
 			# Unpack the inputs from our dataloader
 			b_input_ids, b_input_mask, b_labels = batch
+			
+			# Add batch to GPU, if available
+			b_input_ids.to(self.device)
+			b_input_mask.to(self.device)
+			b_labels.to(self.device)
 			
 			# Telling the model not to compute or store gradients, saving memory and 
 			# speeding up prediction
