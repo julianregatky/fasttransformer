@@ -493,6 +493,7 @@ class FastTransformer:
 
 		# Put model in evaluation mode
 		self.model.eval()
+		self.model.to(self.device)
 
 		# Tracking variable
 		predictions = []
@@ -503,18 +504,13 @@ class FastTransformer:
 			# Unpack the inputs from our dataloader
 			b_input_ids, b_input_mask, b_labels = batch
 			
-			# Add batch to GPU, if available
-			b_input_ids.to(self.device)
-			b_input_mask.to(self.device)
-			b_labels.to(self.device)
-			
 			# Telling the model not to compute or store gradients, saving memory and 
 			# speeding up prediction
 			with torch.no_grad():
 				# Forward pass, calculate logits (predictions prior to softmax)
 				outputs = self.model(
-					b_input_ids,
-					attention_mask=b_input_mask
+					b_input_ids.to(self.device),
+					attention_mask=b_input_mask.to(self.device)
 					)
 
 			logits = outputs[0]
