@@ -78,9 +78,9 @@ class FastTransformer:
 			device: str = None,
 			output_dir: str = None
 	):
-		self.config_path = f'{pretrained_path}/fasttransformer_config.json'
-		if os.path.exists(self.config_path):
-			with open(self.config_path) as handle:
+		config_path = f'{pretrained_path}/fasttransformer_config.json'
+		if os.path.exists(config_path):
+			with open(config_path) as handle:
 				config_json = json.load(handle)
 			num_labels = config_json['num_labels']
 			do_lower_case = config_json['do_lower_case']
@@ -503,7 +503,7 @@ class FastTransformer:
 			'device': self.device,
 			'output_dir': self.output_dir
 		}
-		with open(self.config_path, 'w') as handle:
+		with open(f'{self.output_dir}/fasttransformer_config.json', 'w') as handle:
 			json.dump(config_dict, handle)
 
 	def predict(self, dataloader):
