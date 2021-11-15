@@ -134,14 +134,14 @@ class FastTransformer:
 			eps=eps
 		)
 
-	def tokenize(self, X: list, labels: list) -> tuple:
+	def tokenize(self, x: list, labels: list) -> tuple:
 		"""
 		Tokenizes a list or array of documents.
 
 		Parameters
 		__________
 
-		X: list
+		x: list
 			The list of documents to tokenize.
 		labels: list
 			List of labels, parallel to documents.
@@ -164,7 +164,7 @@ class FastTransformer:
 		attention_masks = []
 
 		# For each document...
-		for text in X:
+		for text in x:
 			# Things 'encode_plus' does:
 			#   (1) Tokenizes documents.
 			#   (2) Appends the '[CLS]' token at the beggining.
@@ -194,7 +194,7 @@ class FastTransformer:
 
 		return input_ids, attention_masks, labels
 
-	def transform(self, X: list, y: list = None, sampler: str = 'random') -> DataLoader:
+	def transform(self, x: list, y: list = None, sampler: str = 'random') -> DataLoader:
 		"""
 		Takes input documents and, optionally, labels and returns
 		dataloaders with batches for training or making predictions.
@@ -202,7 +202,7 @@ class FastTransformer:
 		Parameters
 		__________
 
-		X: list
+		x: list
 			The list of input documents.
 		y: list
 			List of labels, parallel to documents.
@@ -219,9 +219,9 @@ class FastTransformer:
 
 		# If no labels are provided (testing model), create dummy labels that will be ignored
 		if y is None:
-			y = [0]*len(X)
+			y = [0]*len(x)
 
-		input_ids, attention_masks, labels = self.tokenize(X, y)
+		input_ids, attention_masks, labels = self.tokenize(x, y)
 
 		dataset = TensorDataset(input_ids, attention_masks, labels)
 
