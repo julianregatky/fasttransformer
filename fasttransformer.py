@@ -1,5 +1,7 @@
 import datetime
+import json
 import os
+import os.path
 import random
 import time
 import torch
@@ -66,7 +68,27 @@ class DatasetMLM(torch.utils.data.Dataset):
 
 
 class FastTransformer:
-	def __init__(self, pretrained_path, num_labels, do_lower_case, batch_size, max_length, device, output_dir):
+	def __init__(
+			self,
+			pretrained_path: str,
+			num_labels: int = None,
+			do_lower_case: bool = None,
+			batch_size: int = None,
+			max_length: int = None,
+			device: str = None,
+			output_dir: str = None
+	):
+		self.config_path = f'{pretrained_path}/fasttransformer_config.json'
+		if os.path.exists(self.config_path):
+			with open(self.config_path) as handle:
+				config_json = json.load(handle)
+			num_labels = config_json['num_labels']
+			do_lower_case = config_json['do_lower_case']
+			batch_size = config_json['batch_size']
+			max_length = config_json['batch_size']
+			device = config_json['device']
+			output_dir = config_json['output_dir']
+
 		self.model = AutoModelForSequenceClassification.from_pretrained(
 			pretrained_path,              # Path to the pretrained model or name of huggingface model.
 			num_labels=num_labels,      # Number of output labels (2 for binary classification).
@@ -80,6 +102,7 @@ class FastTransformer:
 			)
 		self.pretrained_path = pretrained_path
 		self.num_labels = num_labels
+		self.do_lower_case = do_lower_case
 		self.batch_size = batch_size
 		self.max_length = max_length
 		self.device = device
@@ -471,6 +494,17 @@ class FastTransformer:
 		model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
 		model_to_save.save_pretrained(self.output_dir)
 		self.tokenizer.save_pretrained(self.output_dir)
+
+		config_dict = {
+			'num_labels': self.num_labels,
+			'do_lower_case': self.do_lower_case,
+			'batch_size': self.batch_size,
+			'max_length': self.max_length,
+			'device': self.device,
+			'output_dir': self.output_dir
+		}
+		with open(self.config_path, 'w') as handle:
+			json.dump(config_dict, handle)
 
 	def predict(self, dataloader):
 		"""
