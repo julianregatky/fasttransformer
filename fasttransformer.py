@@ -361,7 +361,7 @@ class FastTransformer:
             'device': self.device,
             'output_dir': self.output_dir
         }
-        with open(f'{self.output_dir}/fasttransformer_config.json', 'w') as handle:
+        with open(f'{output_dir}/fasttransformer_config.json', 'w') as handle:
             json.dump(config_dict, handle)
 
         if update_classifier_pretrained_model:
