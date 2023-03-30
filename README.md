@@ -79,7 +79,7 @@ Please find the API documentation [here](https://raspy-pet-2ee.notion.site/FastT
 
 Also check out the example notebook, available in [colab](https://colab.research.google.com/drive/1Od9z7zZFtwXyXP0bRuyVWtK0HH03f07R?usp=sharing).
 
-## Improvements to be incorporated ASAP
+## Pending improvements
 
 * API Docs
 * Better printing of training and validation loss
